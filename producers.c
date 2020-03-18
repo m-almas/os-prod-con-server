@@ -10,8 +10,6 @@
 #include <pthread.h>
 #include <prodcon.h>
 
-#define BUFSIZE 512
-
 char *service;
 char *host = "localhost";
 
