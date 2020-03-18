@@ -8,6 +8,7 @@
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <prodcon.h>
 
 #define BUFSIZE 512
 
@@ -61,7 +62,7 @@ void *worker(void *ign)
 	}
 
 	write(csock, "PRODUCE\r\n", 10);
-	size = rand() % 50;
+	size = (rand() + 1) % MAX_LETTERS;
 	letters = randstring(size); // generated random string
 	read(csock, buf, BUFSIZE);
 	if (strncmp(buf, "GO\r\n", 4) == 0)
@@ -72,9 +73,9 @@ void *worker(void *ign)
 		read(csock, buf, BUFSIZE); //should be done
 		close(csock);
 	}
-
+	close(csock);
 	free(letters);
-	pthread_exit(NULL);
+	pthread_exit(0);
 }
 
 //this code was copyPasted
