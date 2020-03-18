@@ -168,7 +168,7 @@ int getCommandType(char *commandBuffer)
 void handleProducer(int ssock)
 {
 	sem_wait(&lock);
-	if (producerNumber == PRODUCER_NUMBER)
+	if (producerNumber >= PRODUCER_NUMBER)
 	{
 		sem_post(&lock);
 		return;
@@ -203,7 +203,6 @@ void handleProducer(int ssock)
 
 	sem_post(&lock);
 	write(ssock, "DONE\r\n", 6);
-	close(ssock);
 	sem_post(&produced);
 }
 
@@ -213,7 +212,6 @@ void handleConsumer(int ssock)
 	if (consumerNumber == CONSUMER_NUMBER)
 	{
 		sem_post(&lock);
-		close(ssock);
 		return;
 	}
 	else
@@ -224,22 +222,22 @@ void handleConsumer(int ssock)
 
 	ITEM *item;
 	int itemIndex;
-	int size; // to send accross network
+	int netInt; // to send accross network
 	sem_wait(&produced);
 	sem_wait(&lock);
 	bufferIndex--;
 	item = itemBuffer[bufferIndex];
 	itemBuffer[bufferIndex] = NULL;
 	sem_post(&lock);
-	size = item->size;
-	size = htonl(size);
-	write(ssock, &size, 4);
+
+	netInt = htonl(item->size);
+	write(ssock, &netInt, 4);
 	write(ssock, item->letters, item->size);
 	free(item->letters);
 	free(item);
+
 	sem_wait(&lock);
 	consumerNumber--;
 	sem_post(&lock);
-	close(ssock);
 	sem_post(&consumed);
 }
