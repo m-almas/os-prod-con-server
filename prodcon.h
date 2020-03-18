@@ -12,7 +12,7 @@
                     // to enable secure rejection, that way we will not lose any active ID
 
 // Each item has a random-sized letters buffer between 1 and 1 million.
-#define MAX_LETTERS 10000
+#define MAX_LETTERS 1000000
 
 int connectsock(char *host, char *service, char *protocol);
 int passivesock(char *service, char *protocol, int qlen, int *rport);
