@@ -107,6 +107,7 @@ int main(int argc, char *argv[])
 		j++;
 		//******* separate it into function
 	}
+	return 0;
 }
 
 void *workerForClient(void *ign)
@@ -189,12 +190,6 @@ void handleProducer(int ssock)
 	item = initItem(size);
 	// make sure read happends
 	cc = read(ssock, item->letters, size);
-	// for checking purpose
-	printf("size is %i\n", size);
-	printf("content %s\n", item->letters);
-	// for checking purpose
-
-	// choseing index in bufferItem
 	sem_wait(&lock);
 
 	itemBuffer[bufferIndex] = item;
