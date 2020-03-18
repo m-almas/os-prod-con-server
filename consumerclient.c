@@ -8,6 +8,7 @@
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <fcntl.h>
 
 #define BUFSIZE 512
 char *service;
@@ -15,6 +16,7 @@ char *host = "localhost";
 
 int connectsock(char *host, char *service, char *protocol);
 void *worker(void *ign);
+int properRead(int ssock, int size, char *letters);
 /*
 **	Consumer Client
 */
@@ -53,6 +55,10 @@ void *worker(void *ign)
     int size;
     int cc;
     char *buffer;
+    char fileName[64];
+    pthread_t pid = pthread_self();
+    sprintf(fileName, "%lu.txt", pid);
+    int fd = open(fileName, O_CREAT | O_WRONLY, 0666);
 
     if ((csock = connectsock(host, service, "tcp")) == 0)
     {
@@ -63,10 +69,37 @@ void *worker(void *ign)
     write(csock, "CONSUME\r\n", 10);
     read(csock, &netInt, 4);
     size = ntohl(netInt);
-    buffer = (char *)malloc(size + 1);
-    cc = read(csock, buffer, size);
-    buffer[cc] = '\0';
-    printf("size is %d \n", size);
-    printf("%s \n", buffer);
+    printf("%s ", fileName);
+    printf("size %i \n", size);
+    buffer = (char *)malloc(size);
+    if (properRead(csock, size, buffer) != 0)
+    {
+        close(csock);
+        pthread_exit(0);
+    }
+    write(fd, buffer, size);
+    free(buffer);
     close(csock);
+    pthread_exit(0);
+}
+
+int properRead(int ssock, int size, char *letters)
+{
+    int readUpTo = 0;
+    int cc;
+    for (; readUpTo < size;)
+    {
+        cc = read(ssock, (letters + readUpTo), size - readUpTo);
+        readUpTo += cc;
+        if (cc <= 0)
+        {
+            break;
+        }
+    }
+    if (readUpTo != size)
+    {
+        //we have problem
+        return 1;
+    }
+    return 0;
 }
