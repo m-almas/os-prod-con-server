@@ -16,8 +16,8 @@
 #define CONSUME 2
 
 ITEM **itemBuffer; // here we are going to store the pointers to the address
-sem_t consumed;	// initial value is equal to the bufferSize
-sem_t produced;	// initial value is 0
+sem_t consumed;	   // initial value is equal to the bufferSize
+sem_t produced;	   // initial value is 0
 sem_t lock;		   // to sync access among clients
 int bufferIndex;   // always points to the empty space in the buffer
 int producerNumber;
@@ -30,6 +30,8 @@ int getCommandType(char *commandBuffer);
 void handleProducer(int ssock);
 
 void handleConsumer(int ssock);
+
+int properRead(int ssock, int size, char *letters);
 
 int main(int argc, char *argv[])
 {
@@ -189,7 +191,14 @@ void handleProducer(int ssock)
 	size = ntohl(size);
 	item = initItem(size);
 	// make sure read happends
-	cc = read(ssock, item->letters, size);
+	if (properRead(ssock, size, item->letters) != 0)
+	{
+		sem_wait(&lock);
+		producerNumber--;
+		sem_post(&lock);
+		return;
+	}
+
 	sem_wait(&lock);
 
 	itemBuffer[bufferIndex] = item;
@@ -235,4 +244,25 @@ void handleConsumer(int ssock)
 	consumerNumber--;
 	sem_post(&lock);
 	sem_post(&consumed);
+}
+
+int properRead(int ssock, int size, char *letters)
+{
+	int readUpTo = 0;
+	int cc;
+	for (; readUpTo < size;)
+	{
+		cc = read(ssock, (letters + readUpTo), size - readUpTo);
+		readUpTo += cc;
+		if (cc <= 0)
+		{
+			break;
+		}
+	}
+	if (readUpTo != size)
+	{
+		//we have problem
+		return 1;
+	}
+	return 0;
 }
