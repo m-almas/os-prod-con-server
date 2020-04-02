@@ -92,7 +92,6 @@ int main(int argc, char *argv[])
 	}
 	FD_ZERO(&afds);
 	FD_SET(msock, &afds);
-	printf("msock val:%i \n",msock);
 	for (;;)
 	{
 		memcpy((char *)&rfds, (char *)&afds, sizeof(rfds));
@@ -134,7 +133,6 @@ int main(int argc, char *argv[])
 					int* pass = (int *)malloc(sizeof(int)); // the val we pass into threads
 					//use semaphores to check the values
 					memcpy((int *)pass, (int *)&fd, sizeof(int));
-					printf("pass is %i and fd is %i\n", *pass, fd);
 					fflush(stdout);
 					commandBuffer[cc] = '\0';
 					int freeProdSlots;
@@ -152,7 +150,6 @@ int main(int argc, char *argv[])
 							break;  
 						}else{
 							sem_wait(&fprodNum); // decrease the number of free slots
-							printf("HERE??\n");
 							fflush(stdout);
 							pthread_create(&tid, NULL, handleProducer, pass);
 							break;
@@ -219,7 +216,6 @@ void* handleProducer(void *ign)
 	{
 		close(ssock);
 		free(ign); 
-		printf("properreaderr\n");
 		pthread_exit(0);	
 	}
 
@@ -229,7 +225,6 @@ void* handleProducer(void *ign)
 	sem_post(&lock);
 	write(ssock, "DONE\r\n", 6);
 	sem_post(&produced);
-	printf("AM I here??\n");
 	fflush(stdout);
 	close(ssock); 
 	free(ign);
