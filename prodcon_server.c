@@ -92,9 +92,10 @@ int main(int argc, char *argv[])
 	}
 	FD_ZERO(&afds);
 	FD_SET(msock, &afds);
+	printf("msock val:%i \n",msock);
 	for (;;)
 	{
-		memcpy((char *)&rfds, (char *)&afds, sizeof(afds));
+		memcpy((char *)&rfds, (char *)&afds, sizeof(rfds));
 		alen = sizeof(fsin);
 		if (select(FD_SETSIZE, &rfds, (fd_set *)0, (fd_set *)0,
 				   (struct timeval *)0) < 0)
@@ -112,7 +113,7 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "accept: %s\n", strerror(errno));
 				exit(-1);
 			}
-			if(ssock > mfdv){
+			if(ssock + 1 > mfdv){
 				mfdv = ssock + 1;
 			}
 			FD_SET(ssock, &afds);
@@ -122,17 +123,19 @@ int main(int argc, char *argv[])
 		{
 			if (fd != msock && FD_ISSET(fd, &rfds))
 			{
+				FD_CLR(fd, &afds);
 				if ((cc = read(fd, commandBuffer, 512)) <= 0)
 				{
 					printf("The client has gone.\n");
-					FD_CLR(fd, &afds);
 					close(fd);
 				}
 				else
 				{
 					int* pass = (int *)malloc(sizeof(int)); // the val we pass into threads
 					//use semaphores to check the values
-					memcpy(pass, &fd, sizeof(int));
+					memcpy((int *)pass, (int *)&fd, sizeof(int));
+					printf("pass is %i and fd is %i\n", *pass, fd);
+					fflush(stdout);
 					commandBuffer[cc] = '\0';
 					int freeProdSlots;
 					int freeConsumerSlots;
@@ -144,14 +147,12 @@ int main(int argc, char *argv[])
 							 
 						sem_getvalue(&fprodNum, &freeProdSlots);
 						if(freeProdSlots == 0){
-							printf("Am I here??");
-							FD_CLR(*pass, &afds);
 							close(*pass);
 							free(pass);
 							break;  
 						}else{
 							sem_wait(&fprodNum); // decrease the number of free slots
-							printf("HERE??");
+							printf("HERE??\n");
 							fflush(stdout);
 							pthread_create(&tid, NULL, handleProducer, pass);
 							break;
@@ -161,7 +162,6 @@ int main(int argc, char *argv[])
 						  
 						sem_getvalue(&fconNum, &freeConsumerSlots);
 						if(freeConsumerSlots == 0){
-							FD_CLR(*pass, &afds);
 							close(*pass); 
 							free(pass);
 							break; 
@@ -217,9 +217,9 @@ void* handleProducer(void *ign)
 	// make sure read happends
 	if (properRead(ssock, size, item->letters) != 0)
 	{
-		FD_CLR(ssock, &afds);
 		close(ssock);
 		free(ign); 
+		printf("properreaderr\n");
 		pthread_exit(0);	
 	}
 
@@ -229,7 +229,8 @@ void* handleProducer(void *ign)
 	sem_post(&lock);
 	write(ssock, "DONE\r\n", 6);
 	sem_post(&produced);
-	FD_CLR(ssock, &afds);
+	printf("AM I here??\n");
+	fflush(stdout);
 	close(ssock); 
 	free(ign);
 	sem_post(&fprodNum); //increasing free socket slots
@@ -254,7 +255,6 @@ void *handleConsumer(void * ign)
 	free(item->letters);
 	free(item);
 	sem_post(&consumed);
-	FD_CLR(ssock, &afds);
 	close(ssock); 
 	free(ign);
 	sem_post(&fconNum); //increasing free socket slots
@@ -268,7 +268,7 @@ int properRead(int ssock, int size, char *letters)
 	{
 		cc = read(ssock, (letters + readUpTo), size - readUpTo);
 		readUpTo += cc;
-		if (cc <= 0)
+		if (cc <= 0 || readUpTo == size)
 		{
 			break;
 		}
