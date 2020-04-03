@@ -21,11 +21,10 @@ ITEM **itemBuffer; // here we are going to store the pointers to the address
 sem_t consumed;	   // initial value is equal to the bufferSize
 sem_t produced;	   // initial value is 0
 sem_t lock;		   // to sync access among clients
-sem_t fprodNum, fconNum; 
 int bufferIndex;   // always points to the empty space in the buffer
-int producerNumber;
-int consumerNumber;
 fd_set rfds, afds;
+int freeProdSlots = PRODUCER_NUMBER;
+int freeConSlots = CONSUMER_NUMBER;
 
 ITEM *initItem(int size);
 int getCommandType(char *commandBuffer);
@@ -35,6 +34,8 @@ void* handleProducer(void *ign);
 void* handleConsumer(void *ign);
 
 int properRead(int ssock, int size, char *letters);
+
+int createIfFreeSlot(void *(*handle) (void *), int * freeSlots, int * pass);
 
 int main(int argc, char *argv[])
 {
@@ -50,8 +51,6 @@ int main(int argc, char *argv[])
 	int fd;
 	int mfdv;
 	char commandBuffer[512];
-	//its size is fixed
-	pthread_t threads[THREADS];
 	switch (argc)
 	{
 	case 2:
@@ -73,16 +72,14 @@ int main(int argc, char *argv[])
 	itemBuffer = (ITEM **)malloc(sizeof(ITEM *) * bufferSize);
 	sem_init(&consumed, 0, bufferSize);
 	sem_init(&produced, 0, 0);
-	sem_init(&fprodNum, 0, PRODUCER_NUMBER);
-	sem_init(&fconNum, 0, CONSUMER_NUMBER); 
 	sem_init(&lock, 0, 1);
 	bufferIndex = 0;
-	producerNumber = 0;
-	consumerNumber = 0;
+	FD_ZERO(&afds);
 	//****
 
 	msock = passivesock(service, "tcp", QLEN, &rport);
 	mfdv = msock + 1;
+	FD_SET(msock, &afds);
 	if (rport)
 	{
 		//	Tell the user the selected port
@@ -90,8 +87,7 @@ int main(int argc, char *argv[])
 		//print now
 		fflush(stdout);
 	}
-	FD_ZERO(&afds);
-	FD_SET(msock, &afds);
+	//start the loop
 	for (;;)
 	{
 		memcpy((char *)&rfds, (char *)&afds, sizeof(rfds));
@@ -102,7 +98,7 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "server select: %s\n", strerror(errno));
 			exit(-1);
 		}
-
+		//something is ready to be read
 		if (FD_ISSET(msock, &rfds))
 		{
 			int ssock;
@@ -131,43 +127,26 @@ int main(int argc, char *argv[])
 				else
 				{
 					int* pass = (int *)malloc(sizeof(int)); // the val we pass into threads
-					//use semaphores to check the values
 					memcpy((int *)pass, (int *)&fd, sizeof(int));
-					fflush(stdout);
 					commandBuffer[cc] = '\0';
-					int freeProdSlots;
-					int freeConsumerSlots;
-					pthread_t tid;
 					switch (getCommandType(commandBuffer))
 					{
 					case PRODUCE:
-						//you can use memcpy to pass that socket
-							 
-						sem_getvalue(&fprodNum, &freeProdSlots);
-						if(freeProdSlots == 0){
+						if(createIfFreeSlot(handleProducer, &freeProdSlots, pass) < 0){
+							printf("no free producer slots there \n");
 							close(*pass);
 							free(pass);
-							break;  
-						}else{
-							sem_wait(&fprodNum); // decrease the number of free slots
 							fflush(stdout);
-							pthread_create(&tid, NULL, handleProducer, pass);
-							break;
 						}
-						
+						break;
 					case CONSUME:
-						  
-						sem_getvalue(&fconNum, &freeConsumerSlots);
-						if(freeConsumerSlots == 0){
-							close(*pass); 
+						if(createIfFreeSlot(handleConsumer, &freeConSlots, pass) < 0){
+							printf("no free consumer slots there \n");
+							close(*pass);
 							free(pass);
-							break; 
-						}else{
-							sem_wait(&fconNum); // decrease the number of free slopts 
-							
-							pthread_create(&tid, NULL, handleConsumer, pass);
-							break;
+							fflush(stdout);
 						}
+						break;
 					default:
 						break;
 					}
@@ -214,21 +193,25 @@ void* handleProducer(void *ign)
 	// make sure read happends
 	if (properRead(ssock, size, item->letters) != 0)
 	{
+		printf("exit due to unproper read\n");
+		fflush(stdout);
 		close(ssock);
 		free(ign); 
+		free(item->letters);
+		free(item);
 		pthread_exit(0);	
 	}
 
 	sem_wait(&lock);
 	itemBuffer[bufferIndex] = item;
 	bufferIndex++;
+	freeProdSlots++;
 	sem_post(&lock);
 	write(ssock, "DONE\r\n", 6);
 	sem_post(&produced);
 	fflush(stdout);
 	close(ssock); 
 	free(ign);
-	sem_post(&fprodNum); //increasing free socket slots
 }
 //free the sock there
 void *handleConsumer(void * ign)
@@ -250,9 +233,11 @@ void *handleConsumer(void * ign)
 	free(item->letters);
 	free(item);
 	sem_post(&consumed);
+	sem_wait(&lock);
+	freeConSlots++; 
+	sem_post(&lock);
 	close(ssock); 
 	free(ign);
-	sem_post(&fconNum); //increasing free socket slots
 }
 
 int properRead(int ssock, int size, char *letters)
@@ -273,5 +258,19 @@ int properRead(int ssock, int size, char *letters)
 		//we have problem
 		return 1;
 	}
+	return 0;
+}
+
+int createIfFreeSlot(void *(*handle) (void *), int * freeSlots, int * pass){
+	pthread_t tid;
+	sem_wait(&lock);
+	if(*freeSlots <= 0){
+		sem_post(&lock);
+		return -1;  
+	
+	}
+	*freeSlots = *freeSlots - 1; 
+	sem_post(&lock);
+	pthread_create(&tid, NULL, handle, pass);
 	return 0;
 }
