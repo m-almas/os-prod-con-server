@@ -9,7 +9,7 @@
 #define MAX_CON 480
 
 // Each item has a random-sized letters buffer between 1 and 1 million.
-#define MAX_LETTERS 1000
+#define MAX_LETTERS 10000
 
 int connectsock(char *host, char *service, char *protocol);
 int passivesock(char *service, char *protocol, int qlen, int *rport);
