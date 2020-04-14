@@ -101,6 +101,8 @@ int main(int argc, char *argv[])
 		{
 			close(*fdSock);
 			free(fdSock);
+			printf("REJECTED\n");
+			fflush(stdout);
 			sem_post(&lock);
 			continue;
 		}
@@ -178,6 +180,8 @@ void handleProducer(int ssock)
 	if (producerNumber >= MAX_PROD)
 	{
 		clientNumber--;
+		printf("REJECTED\n");
+		fflush(stdout);
 		sem_post(&lock);
 		return;
 	}
@@ -222,6 +226,8 @@ void handleConsumer(int ssock)
 	if (consumerNumber >= MAX_CON)
 	{
 		clientNumber--;
+		printf("REJECTED\n");
+		fflush(stdout);
 		sem_post(&lock);
 		return;
 	}
