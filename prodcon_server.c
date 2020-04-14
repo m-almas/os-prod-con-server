@@ -22,6 +22,7 @@ sem_t lock;		   // to sync access among clients
 int bufferIndex;   // always points to the empty space in the buffer
 int producerNumber;
 int consumerNumber;
+int clientNumber; 
 
 void *workerForClient(void *ign);
 ITEM *initItem(int size);
@@ -45,7 +46,7 @@ int main(int argc, char *argv[])
 	int status;
 	int j = 0;
 	//its size is fixed
-	pthread_t threads[THREADS];
+	// pthread_t threads[THREADS];
 	switch (argc)
 	{
 	case 2:
@@ -71,6 +72,7 @@ int main(int argc, char *argv[])
 	bufferIndex = 0;
 	producerNumber = 0;
 	consumerNumber = 0;
+	clientNumber = 0;
 	//****
 
 	msock = passivesock(service, "tcp", QLEN, &rport);
@@ -95,18 +97,20 @@ int main(int argc, char *argv[])
 		}
 
 		sem_wait(&lock);
-		if ((producerNumber + consumerNumber) >= MAX_CLIENT)
+		if (clientNumber >= MAX_CLIENTS)
 		{
 			close(*fdSock);
 			free(fdSock);
 			sem_post(&lock);
 			continue;
 		}
+		clientNumber++; 
 		sem_post(&lock);
 		//******* separate it into function
-		j = j % THREADS;
-		status = pthread_create(&threads[j], NULL, workerForClient, fdSock);
-		j++;
+		// j = j % THREADS;
+		pthread_t pid;
+		status = pthread_create(&pid, NULL, workerForClient, fdSock);
+		// j++;
 		//******* separate it into function
 	}
 	return 0;
@@ -171,8 +175,9 @@ int getCommandType(char *commandBuffer)
 void handleProducer(int ssock)
 {
 	sem_wait(&lock);
-	if (producerNumber >= PRODUCER_NUMBER)
+	if (producerNumber >= MAX_PROD)
 	{
+		clientNumber--;
 		sem_post(&lock);
 		return;
 	}
@@ -194,6 +199,7 @@ void handleProducer(int ssock)
 	if (properRead(ssock, size, item->letters) != 0)
 	{
 		sem_wait(&lock);
+		clientNumber--;
 		producerNumber--;
 		sem_post(&lock);
 		return;
@@ -204,7 +210,7 @@ void handleProducer(int ssock)
 	itemBuffer[bufferIndex] = item;
 	bufferIndex++;
 	producerNumber--;
-
+	clientNumber--;
 	sem_post(&lock);
 	write(ssock, "DONE\r\n", 6);
 	sem_post(&produced);
@@ -213,8 +219,9 @@ void handleProducer(int ssock)
 void handleConsumer(int ssock)
 {
 	sem_wait(&lock);
-	if (consumerNumber == CONSUMER_NUMBER)
+	if (consumerNumber >= MAX_CON)
 	{
+		clientNumber--;
 		sem_post(&lock);
 		return;
 	}
@@ -242,6 +249,7 @@ void handleConsumer(int ssock)
 
 	sem_wait(&lock);
 	consumerNumber--;
+	clientNumber--;
 	sem_post(&lock);
 	sem_post(&consumed);
 }
@@ -266,3 +274,22 @@ int properRead(int ssock, int size, char *letters)
 	}
 	return 0;
 }
+
+// int properWrite(int ssock, int size, char *letters){
+// 	int writeUpTo = 0;
+// 	int cc;
+// 	for (;writeUpTo < size;){
+// 		cc = read(ssock, (letters + writeUpTo), size - writeUpTo);
+// 		writeUpTo += cc;
+// 		if (cc <= 0)
+// 		{
+// 			break;
+// 		}
+// 	}
+// 	if (writeUpTo != size)
+// 	{
+// 		//we have problem
+// 		return 1;
+// 	}
+// 	return 0;
+// }

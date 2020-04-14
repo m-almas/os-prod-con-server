@@ -71,6 +71,7 @@ void *worker(void *ign)
     size = ntohl(netInt);
     printf("%s ", fileName);
     printf("size %i \n", size);
+    fflush(stdout);
     buffer = (char *)malloc(size);
     if (properRead(csock, size, buffer) != 0)
     {
