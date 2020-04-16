@@ -23,8 +23,9 @@ sem_t produced;	   // initial value is 0
 sem_t lock;		   // to sync access among clients
 int bufferIndex;   // always points to the empty space in the buffer
 fd_set rfds, afds;
-int freeProdSlots = PRODUCER_NUMBER;
-int freeConSlots = CONSUMER_NUMBER;
+int freeProdSlots = MAX_PROD;
+int freeConSlots = MAX_CON;
+int clientNumbers = 0;
 
 ITEM *initItem(int size);
 int getCommandType(char *commandBuffer);
@@ -36,7 +37,7 @@ void* handleConsumer(void *ign);
 int properRead(int ssock, int size, char *letters);
 
 int createIfFreeSlot(void *(*handle) (void *), int * freeSlots, int * pass);
-
+//corrected critical sections
 int main(int argc, char *argv[])
 {
 	int bufferSize;
@@ -185,7 +186,6 @@ void* handleProducer(void *ign)
 	ITEM *item;
 	int size;
 	int cc;
-	sem_wait(&consumed);
 	write(ssock, "GO\r\n", 4);
 	read(ssock, &size, 4);
 	size = ntohl(size);
@@ -201,11 +201,12 @@ void* handleProducer(void *ign)
 		free(item);
 		pthread_exit(0);	
 	}
-
+	sem_wait(&consumed);
 	sem_wait(&lock);
 	itemBuffer[bufferIndex] = item;
 	bufferIndex++;
 	freeProdSlots++;
+	clientNumbers--;
 	sem_post(&lock);
 	write(ssock, "DONE\r\n", 6);
 	sem_post(&produced);
@@ -226,15 +227,15 @@ void *handleConsumer(void * ign)
 	item = itemBuffer[bufferIndex];
 	itemBuffer[bufferIndex] = NULL;
 	sem_post(&lock);
-
+	sem_post(&consumed);
 	netInt = htonl(item->size);
 	write(ssock, &netInt, 4);
 	write(ssock, item->letters, item->size);
 	free(item->letters);
 	free(item);
-	sem_post(&consumed);
 	sem_wait(&lock);
 	freeConSlots++; 
+	clientNumbers--;
 	sem_post(&lock);
 	close(ssock); 
 	free(ign);
@@ -264,11 +265,12 @@ int properRead(int ssock, int size, char *letters)
 int createIfFreeSlot(void *(*handle) (void *), int * freeSlots, int * pass){
 	pthread_t tid;
 	sem_wait(&lock);
-	if(*freeSlots <= 0){
+	if(*freeSlots <= 0 || clientNumbers >= MAX_CLIENTS){
 		sem_post(&lock);
 		return -1;  
 	
 	}
+	clientNumbers++;
 	*freeSlots = *freeSlots - 1; 
 	sem_post(&lock);
 	pthread_create(&tid, NULL, handle, pass);
