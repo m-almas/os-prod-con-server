@@ -194,7 +194,6 @@ void handleProducer(int ssock)
 	ITEM *item;
 	int size;
 	int cc;
-	sem_wait(&consumed);
 	write(ssock, "GO\r\n", 4);
 	read(ssock, &size, 4);
 	size = ntohl(size);
@@ -208,7 +207,7 @@ void handleProducer(int ssock)
 		sem_post(&lock);
 		return;
 	}
-
+	sem_wait(&consumed);
 	sem_wait(&lock);
 
 	itemBuffer[bufferIndex] = item;
@@ -246,7 +245,7 @@ void handleConsumer(int ssock)
 	item = itemBuffer[bufferIndex];
 	itemBuffer[bufferIndex] = NULL;
 	sem_post(&lock);
-
+	sem_post(&consumed);
 	netInt = htonl(item->size);
 	write(ssock, &netInt, 4);
 	write(ssock, item->letters, item->size);
@@ -257,7 +256,6 @@ void handleConsumer(int ssock)
 	consumerNumber--;
 	clientNumber--;
 	sem_post(&lock);
-	sem_post(&consumed);
 }
 
 int properRead(int ssock, int size, char *letters)
