@@ -9,11 +9,15 @@
 #include <netinet/in.h>
 #include <pthread.h>
 #include <fcntl.h>
+#include <math.h>
 
-#define BUFSIZE 512
+#define SLOW_CLIENT 3
 char *service;
 char *host = "localhost";
+double rate; 
+int bad; 
 
+double poissonRandomInterarrivalDelay( double r );
 int connectsock(char *host, char *service, char *protocol);
 void *worker(void *ign);
 int properRead(int ssock, int size, char *letters);
@@ -22,22 +26,44 @@ int properRead(int ssock, int size, char *letters);
 */
 int main(int argc, char *argv[])
 {
-    if (argc != 4)
-    {
-        printf("wrong number of arguments \n");
-        fflush(stdout);
-    }
-
-    size_t i;
     int cNumber;
-    host = argv[1];
-    service = argv[2];
-    cNumber = atoi(argv[3]);
+	size_t i;
+	double sleepTime;
+	int seconds; 
+	int usec; 
+
+    switch (argc) {
+		case 5:
+			service = argv[1];
+			cNumber = atoi(argv[2]);
+			rate = strtof(argv[3], NULL); 
+			bad = atoi(argv[4]);
+			break;
+		case 6:
+			host = argv[1];
+			service = argv[2];
+			cNumber = atoi(argv[3]);
+			rate = strtof(argv[4], NULL); 
+			bad = atoi(argv[5]);
+			break;
+		default:
+			printf("wrong number of arguments \n");	
+			fflush(stdout);
+			return -1;
+	}
+    cNumber %= 2000;
 
     pthread_t threads[cNumber];
 
     for (i = 0; i < cNumber; i++)
     {
+        sleepTime = poissonRandomInterarrivalDelay(rate);
+		seconds = (int) sleepTime; 
+		usec = 1000000*(sleepTime - seconds); 
+        printf("sleepTime %lf, seconds %i, usec %i\n", sleepTime, seconds, usec);
+        fflush(stdout); 
+		sleep(seconds);
+		usleep(usec);
         pthread_create(&threads[i], NULL, worker, NULL);
     }
 
@@ -65,6 +91,13 @@ void *worker(void *ign)
         fprintf(stderr, "Cannot connect to server.\n");
         exit(-1);
     }
+
+    int dice = rand()%100; 
+	if( dice <= bad){
+        printf("Slow client with dice %i\n", dice); 
+        fflush(stdout);
+		sleep(SLOW_CLIENT); 
+	}
 
     write(csock, "CONSUME\r\n", 10);
     read(csock, &netInt, 4);
@@ -103,4 +136,14 @@ int properRead(int ssock, int size, char *letters)
         return 1;
     }
     return 0;
+}
+
+/*
+**      Poisson interarrival times. Adapted from various sources
+**      r = desired arrival rate
+*/
+double poissonRandomInterarrivalDelay( double r )
+{
+    return (log((double) 1.0 - 
+			((double) rand())/((double) RAND_MAX)))/-r;
 }

@@ -59,6 +59,7 @@ int main(int argc, char *argv[])
 		sleepTime = poissonRandomInterarrivalDelay(rate);
 		seconds = (int) sleepTime; 
 		usec = 1000000*(sleepTime - seconds); 
+		printf("sleepTime %lf, seconds %i, usec %i\n", sleepTime, seconds, usec);
 		fflush(stdout); 
 		sleep(seconds);
 		usleep(usec);
@@ -87,6 +88,7 @@ void *worker(void *ign)
 	}
 	int dice = rand()%100; 
 	if( dice <= bad){
+		printf("Slow client with dice %i\n", dice); 
 		sleep(SLOW_CLIENT); 
 	}
 	write(csock, "PRODUCE\r\n", 10);
