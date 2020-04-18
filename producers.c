@@ -11,6 +11,7 @@
 #include <prodcon.h>
 #include <math.h>
 
+#define SLOW_CLIENT 3
 char *service;
 char *host = "localhost";
 double rate; 
@@ -50,6 +51,7 @@ int main(int argc, char *argv[])
 			fflush(stdout);
 			return -1;
 	}
+	pNumber %= 2000;
 	pthread_t threads[pNumber];
 
 	for (i = 0; i < pNumber; i++)
@@ -57,7 +59,6 @@ int main(int argc, char *argv[])
 		sleepTime = poissonRandomInterarrivalDelay(rate);
 		seconds = (int) sleepTime; 
 		usec = 1000000*(sleepTime - seconds); 
-		printf("sleepTime: %lf rate %lf seconds %i usec %i\n", sleepTime, rate, seconds, usec);
 		fflush(stdout); 
 		sleep(seconds);
 		usleep(usec);
@@ -84,7 +85,10 @@ void *worker(void *ign)
 		fprintf(stderr, "Cannot connect to server.\n");
 		exit(-1);
 	}
-
+	int dice = rand()%100; 
+	if( dice <= bad){
+		sleep(SLOW_CLIENT); 
+	}
 	write(csock, "PRODUCE\r\n", 10);
 	size = (rand() + 1) % MAX_LETTERS;
 	letters = randstring(size); // generated random string
