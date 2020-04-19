@@ -166,8 +166,8 @@ ITEM *initItem(uint32_t size, int socket)
 	item = (ITEM *)malloc(sizeof(ITEM));
 	item->size = size;
 	item->prod_sd = socket;
-	//printf("created item with socket %i, and size %u\n", socket, size);
-	//fflush(stdout);
+	printf("created item with socket %i, and size %u\n", socket, size);
+	fflush(stdout);
 	return item;
 }
 
@@ -194,28 +194,12 @@ void* handleProducer(void *ign)
 	read(ssock, &size, 4);
 	size = ntohl(size);
 	item = initItem(size, ssock);
-	// make sure read happends
-	//if (properRead(ssock, size, item->letters) != 0)
-	//{
-	//	printf("exit due to unproper read\n");
-	//	fflush(stdout);
-	//	close(ssock);
-	//	free(ign); 
-	//	free(item->letters);
-	//	free(item);
-	//	pthread_exit(0);	
-	//}
 	sem_wait(&consumed);
 	sem_wait(&lock);
 	itemBuffer[bufferIndex] = item;
 	bufferIndex++;
-	//freeProdSlots++;
-	//clientNumbers--;
 	sem_post(&lock);
-	//write(ssock, "DONE\r\n", 6);
 	sem_post(&produced);
-	//fflush(stdout);
-	//close(ssock); 
 	free(ign);
 }
 //free the sock there
@@ -306,8 +290,8 @@ char* readLetters(ITEM * item){
 		return NULL; 
 	} 
 	write(item->prod_sd, "DONE\r\n", 6);
-	//printf("released socket with %i, and size %u\n", item->prod_sd, item->size); 
-	//fflush(stdout);
+	printf("released socket with %i, and size %u\n", item->prod_sd, item->size); 
+	fflush(stdout);
 	close(item->prod_sd);
 	return letters;  
 }
