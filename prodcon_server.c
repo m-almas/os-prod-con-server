@@ -40,6 +40,7 @@ int properRead(int ssock, int size, char *letters);
 
 int createIfFreeSlot(void *(*handle) (void *), int * freeSlots, int * pass);
 //corrected critical sections
+//in order to speed up comment out prints on lines 170, 294
 int main(int argc, char *argv[])
 {
 	int bufferSize;
