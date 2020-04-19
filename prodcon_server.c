@@ -27,8 +27,10 @@ int freeProdSlots = MAX_PROD;
 int freeConSlots = MAX_CON;
 int clientNumbers = 0;
 
-ITEM *initItem(int size);
+ITEM *initItem(uint32_t size, int socket);
 int getCommandType(char *commandBuffer);
+
+char* readLetters(ITEM * item);
 
 void* handleProducer(void *ign);
 
@@ -158,12 +160,14 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
-ITEM *initItem(int size)
+ITEM *initItem(uint32_t size, int socket)
 {
 	ITEM *item;
 	item = (ITEM *)malloc(sizeof(ITEM));
 	item->size = size;
-	item->letters = (char *)malloc(size);
+	item->prod_sd = socket;
+	//printf("created item with socket %i, and size %u\n", socket, size);
+	//fflush(stdout);
 	return item;
 }
 
@@ -184,34 +188,34 @@ void* handleProducer(void *ign)
 {
 	int ssock = *((int *)ign);
 	ITEM *item;
-	int size;
+	uint32_t size;
 	int cc;
 	write(ssock, "GO\r\n", 4);
 	read(ssock, &size, 4);
 	size = ntohl(size);
-	item = initItem(size);
+	item = initItem(size, ssock);
 	// make sure read happends
-	if (properRead(ssock, size, item->letters) != 0)
-	{
-		printf("exit due to unproper read\n");
-		fflush(stdout);
-		close(ssock);
-		free(ign); 
-		free(item->letters);
-		free(item);
-		pthread_exit(0);	
-	}
+	//if (properRead(ssock, size, item->letters) != 0)
+	//{
+	//	printf("exit due to unproper read\n");
+	//	fflush(stdout);
+	//	close(ssock);
+	//	free(ign); 
+	//	free(item->letters);
+	//	free(item);
+	//	pthread_exit(0);	
+	//}
 	sem_wait(&consumed);
 	sem_wait(&lock);
 	itemBuffer[bufferIndex] = item;
 	bufferIndex++;
-	freeProdSlots++;
-	clientNumbers--;
+	//freeProdSlots++;
+	//clientNumbers--;
 	sem_post(&lock);
-	write(ssock, "DONE\r\n", 6);
+	//write(ssock, "DONE\r\n", 6);
 	sem_post(&produced);
-	fflush(stdout);
-	close(ssock); 
+	//fflush(stdout);
+	//close(ssock); 
 	free(ign);
 }
 //free the sock there
@@ -220,7 +224,7 @@ void *handleConsumer(void * ign)
 	int ssock = *((int *)ign);
 	ITEM *item;
 	int itemIndex;
-	int netInt; // to send accross network
+	uint32_t netInt; // to send accross network
 	sem_wait(&produced);
 	sem_wait(&lock);
 	bufferIndex--;
@@ -230,11 +234,26 @@ void *handleConsumer(void * ign)
 	sem_post(&consumed);
 	netInt = htonl(item->size);
 	write(ssock, &netInt, 4);
-	write(ssock, item->letters, item->size);
-	free(item->letters);
+	char* letters = readLetters(item); //sends done and closes producer socket
+	if(letters == NULL){
+		free(item);
+		close(ssock); 
+		free(ign);
+		sem_wait(&lock);
+		freeConSlots++; 
+		clientNumbers--;
+		freeProdSlots++;
+		clientNumbers--;
+		sem_post(&lock);
+		pthread_exit(0);
+	}
+	write(ssock, letters, item->size);
+	free(letters);
 	free(item);
 	sem_wait(&lock);
 	freeConSlots++; 
+	clientNumbers--;
+	freeProdSlots++;
 	clientNumbers--;
 	sem_post(&lock);
 	close(ssock); 
@@ -275,4 +294,20 @@ int createIfFreeSlot(void *(*handle) (void *), int * freeSlots, int * pass){
 	sem_post(&lock);
 	pthread_create(&tid, NULL, handle, pass);
 	return 0;
+}
+
+char* readLetters(ITEM * item){
+	char* letters = (char*)malloc(item->size);
+	if(properRead(item->prod_sd, item->size, letters) != 0){
+		printf("Exit due to the read error\n");
+		fflush(stdout);
+		free(letters);
+		close(item->prod_sd);
+		return NULL; 
+	} 
+	write(item->prod_sd, "DONE\r\n", 6);
+	//printf("released socket with %i, and size %u\n", item->prod_sd, item->size); 
+	//fflush(stdout);
+	close(item->prod_sd);
+	return letters;  
 }

@@ -16,8 +16,8 @@ int passivesock( char *service, char *protocol, int qlen, int *rport );
 
 typedef struct item_t
 {
-        int size;
-        char *letters;
+        uint32_t size;
+        int   prod_sd;
 } ITEM;
 
 #endif
