@@ -122,6 +122,8 @@ void *worker(void *ign)
         write(fd, buffer, BUFSIZE);
     }
     close(csock);
+    close(devNull);
+    close(fd);
     pthread_exit(0);
 }
 

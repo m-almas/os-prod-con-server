@@ -106,6 +106,7 @@ void *worker(void *ign)
 		close(csock);
 	}
 	close(csock);
+	close(randomData);
 	pthread_exit(0);
 }
 

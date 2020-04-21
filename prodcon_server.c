@@ -27,6 +27,8 @@ int freeProdSlots = MAX_PROD;
 int freeConSlots = MAX_CON;
 int clientNumbers = 0;
 
+int min(int a, int b);
+
 ITEM *initItem(uint32_t size, int socket);
 
 int stramLetters(ITEM * item, int socket);
@@ -289,21 +291,31 @@ char* readLetters(ITEM * item){
 }
 
 int stramLetters(ITEM * item, int socket){
-	char* smallBuffer = (char*) malloc(BUFSIZE); //may be you should not hard code?
+	char * smallBuffer = (char*) malloc(BUFSIZE); //may be you should not hard code?
 	//here I am assuming that read will not be interupted because the values are small 
 	int cc = 0;
-	uint32_t readUpTo = 0;  
+	uint32_t readUpTo = 0; 
+	int readSize = 0;  
 	while(readUpTo < item->size){
-		cc = read(item->psd, smallBuffer, BUFSIZE); //can it block?? 
+		readSize = min(BUFSIZE, item->size - readUpTo);
+		cc = read(item->psd, smallBuffer, readSize); //can it block?? 
 		if(cc < 0){
 			return -1;	
 		}
 		readUpTo += cc;
-		write(socket, smallBuffer, BUFSIZE);  
+		write(socket, smallBuffer, readSize);  
 	}
 	write(item->psd, "DONE\r\n", 6);
 	printf("released socket with %i, and size %u\n", item->psd, item->size); 
 	fflush(stdout);
+	free(smallBuffer);
 	close(item->psd);
 	return 0; 
+}
+
+int min(int a, int b){
+    if(a < b){
+        return a; 
+    }
+    return b;
 }
