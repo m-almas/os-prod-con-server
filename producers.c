@@ -8,6 +8,7 @@
 #include <sys/time.h>
 #include <netinet/in.h>
 #include <pthread.h>
+#include <fcntl.h>
 #include <prodcon.h>
 #include <math.h>
 
@@ -20,6 +21,8 @@ double poissonRandomInterarrivalDelay( double r );
 int connectsock(char *host, char *service, char *protocol);
 void *worker(void *ign);
 char *randstring(size_t length);
+int streamFromRandom(int randomData, int socket, int size);
+int min(int a, int b);
 /*
 **	Producer Client
 */
@@ -78,7 +81,7 @@ void *worker(void *ign)
 	char buf[BUFSIZE];
 	int size;
 	int netInt;
-	char *letters;
+	int randomData = open("/dev/urandom", O_RDONLY);
 
 	if ((csock = connectsock(host, service, "tcp")) == 0)
 	{
@@ -92,19 +95,35 @@ void *worker(void *ign)
 	}
 	write(csock, "PRODUCE\r\n", 10);
 	size = (rand() + 1) % MAX_LETTERS;
-	letters = randstring(size); // generated random string
+	// letters = randstring(size); // generated random string
 	read(csock, buf, BUFSIZE);
 	if (strncmp(buf, "GO\r\n", 4) == 0)
 	{
 		netInt = htonl(size);
 		write(csock, &netInt, 4);
-		write(csock, letters, size);
+		streamFromRandom(randomData, csock, size);
 		read(csock, buf, BUFSIZE); //should be done
 		close(csock);
 	}
 	close(csock);
-	free(letters);
 	pthread_exit(0);
+}
+
+int streamFromRandom(int randomData, int socket, int size){
+	char buf[BUFSIZE]; 
+	int cc = 0;
+	int readUpTo = 0; 
+	int readSize = 0; 
+	while(readUpTo < size){
+		readSize = min(BUFSIZE, size - readUpTo);
+		cc = read(randomData, buf, readSize);
+		if( cc < 0){
+			return -1; 
+		}
+		readUpTo += cc; 
+		write(socket, buf, readSize); 
+	}
+	return 0;
 }
 
 //this code was copyPasted
@@ -141,4 +160,11 @@ double poissonRandomInterarrivalDelay( double r )
 {
     return (log((double) 1.0 - 
 			((double) rand())/((double) RAND_MAX)))/-r;
+}
+
+int min(int a, int b){
+	if(a < b){
+		return a; 
+	}
+	return b;
 }

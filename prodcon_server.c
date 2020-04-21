@@ -28,6 +28,9 @@ int freeConSlots = MAX_CON;
 int clientNumbers = 0;
 
 ITEM *initItem(uint32_t size, int socket);
+
+int stramLetters(ITEM * item, int socket);
+
 int getCommandType(char *commandBuffer);
 
 char* readLetters(ITEM * item);
@@ -219,21 +222,9 @@ void *handleConsumer(void * ign)
 	sem_post(&consumed);
 	netInt = htonl(item->size);
 	write(ssock, &netInt, 4);
-	char* letters = readLetters(item); //sends done and closes producer socket
-	if(letters == NULL){
-		free(item);
-		close(ssock); 
-		free(ign);
-		sem_wait(&lock);
-		freeConSlots++; 
-		clientNumbers--;
-		freeProdSlots++;
-		clientNumbers--;
-		sem_post(&lock);
-		pthread_exit(0);
+	if(stramLetters(item, ssock) != 0){ // responsible for closing producer socket
+		printf("we got problems during streaming process\n");
 	}
-	write(ssock, letters, item->size);
-	free(letters);
 	free(item);
 	sem_wait(&lock);
 	freeConSlots++; 
@@ -295,4 +286,24 @@ char* readLetters(ITEM * item){
 	fflush(stdout);
 	close(item->psd);
 	return letters;  
+}
+
+int stramLetters(ITEM * item, int socket){
+	char* smallBuffer = (char*) malloc(BUFSIZE); //may be you should not hard code?
+	//here I am assuming that read will not be interupted because the values are small 
+	int cc = 0;
+	uint32_t readUpTo = 0;  
+	while(readUpTo < item->size){
+		cc = read(item->psd, smallBuffer, BUFSIZE); //can it block?? 
+		if(cc < 0){
+			return -1;	
+		}
+		readUpTo += cc;
+		write(socket, smallBuffer, BUFSIZE);  
+	}
+	write(item->psd, "DONE\r\n", 6);
+	printf("released socket with %i, and size %u\n", item->psd, item->size); 
+	fflush(stdout);
+	close(item->psd);
+	return 0; 
 }

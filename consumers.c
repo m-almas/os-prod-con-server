@@ -21,6 +21,8 @@ double poissonRandomInterarrivalDelay( double r );
 int connectsock(char *host, char *service, char *protocol);
 void *worker(void *ign);
 int properRead(int ssock, int size, char *letters);
+int min(int a, int b);
+int streamToDevNull(int socket, int devNull, int size);
 /*
 **	Consumer Client
 */
@@ -80,10 +82,11 @@ void *worker(void *ign)
     int netInt;
     int size;
     int cc;
-    char *buffer;
+    char buffer[BUFSIZE];
     char fileName[64];
     pthread_t pid = pthread_self();
     sprintf(fileName, "%lu.txt", pid);
+    int devNull = open("/dev/null", O_WRONLY);
     int fd = open(fileName, O_CREAT | O_WRONLY, 0666);
 
     if ((csock = connectsock(host, service, "tcp")) == 0)
@@ -100,21 +103,44 @@ void *worker(void *ign)
 	}
 
     write(csock, "CONSUME\r\n", 10);
-    read(csock, &netInt, 4);
+    if(read(csock, &netInt, 4) < 0){
+        sprintf(buffer, "%s", REJECT);
+        write(fd, buffer, BUFSIZE);
+        close(csock); 
+        pthread_exit(0);
+    }
     size = ntohl(netInt);
     printf("%s ", fileName);
     printf("size %i \n", size);
     fflush(stdout);
-    buffer = (char *)malloc(size);
-    if (properRead(csock, size, buffer) != 0)
-    {
-        close(csock);
-        pthread_exit(0);
+    int readUpTo = streamToDevNull(csock, devNull, size);
+    if(readUpTo < size){
+        sprintf(buffer, "%s %i", BYTE_ERROR, readUpTo);
+        write(fd, buffer, BUFSIZE);  
+    }else{
+        sprintf(buffer, "%s %i", SUCCESS, readUpTo);
+        write(fd, buffer, BUFSIZE);
     }
-    write(fd, buffer, size);
-    free(buffer);
     close(csock);
     pthread_exit(0);
+}
+
+int streamToDevNull(int socket, int devNull, int size){
+    char buffer[BUFSIZE];
+    int readUpTo = 0; 
+    int cc = 0;
+    int readSize = 0; 
+
+    while(readUpTo < size){
+        readSize = min(BUFSIZE, size - readUpTo);
+        cc = read(socket, buffer, readSize);
+        if( cc < 0){
+            break; 
+        }
+        readUpTo += cc; 
+        write(devNull, buffer, readSize);
+    }
+    return readUpTo; 
 }
 
 int properRead(int ssock, int size, char *letters)
@@ -146,4 +172,11 @@ double poissonRandomInterarrivalDelay( double r )
 {
     return (log((double) 1.0 - 
 			((double) rand())/((double) RAND_MAX)))/-r;
+}
+
+int min(int a, int b){
+    if(a < b){
+        return a; 
+    }
+    return b;
 }
