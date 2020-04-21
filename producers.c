@@ -11,7 +11,6 @@
 #include <prodcon.h>
 #include <math.h>
 
-#define SLOW_CLIENT 3
 char *service;
 char *host = "localhost";
 double rate; 

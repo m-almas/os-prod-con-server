@@ -166,7 +166,7 @@ ITEM *initItem(uint32_t size, int socket)
 	ITEM *item;
 	item = (ITEM *)malloc(sizeof(ITEM));
 	item->size = size;
-	item->prod_sd = socket;
+	item->psd = socket;
 	printf("created item with socket %i, and size %u\n", socket, size);
 	fflush(stdout);
 	return item;
@@ -283,16 +283,16 @@ int createIfFreeSlot(void *(*handle) (void *), int * freeSlots, int * pass){
 
 char* readLetters(ITEM * item){
 	char* letters = (char*)malloc(item->size);
-	if(properRead(item->prod_sd, item->size, letters) != 0){
+	if(properRead(item->psd, item->size, letters) != 0){
 		printf("Exit due to the read error\n");
 		fflush(stdout);
 		free(letters);
-		close(item->prod_sd);
+		close(item->psd);
 		return NULL; 
 	} 
-	write(item->prod_sd, "DONE\r\n", 6);
-	printf("released socket with %i, and size %u\n", item->prod_sd, item->size); 
+	write(item->psd, "DONE\r\n", 6);
+	printf("released socket with %i, and size %u\n", item->psd, item->size); 
 	fflush(stdout);
-	close(item->prod_sd);
+	close(item->psd);
 	return letters;  
 }

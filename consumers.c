@@ -10,8 +10,8 @@
 #include <pthread.h>
 #include <fcntl.h>
 #include <math.h>
+#include <prodcon.h>
 
-#define SLOW_CLIENT 3
 char *service;
 char *host = "localhost";
 double rate; 
