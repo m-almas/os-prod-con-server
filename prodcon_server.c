@@ -300,7 +300,7 @@ int stramLetters(ITEM * item, int socket){
 		readSize = min(BUFSIZE, item->size - readUpTo);
 		cc = read(item->psd, smallBuffer, readSize); //can it block?? 
 		if(cc < 0){
-			return -1;	
+			break;	
 		}
 		readUpTo += cc;
 		write(socket, smallBuffer, readSize);  

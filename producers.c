@@ -111,7 +111,7 @@ void *worker(void *ign)
 }
 
 int streamFromRandom(int randomData, int socket, int size){
-	char buf[BUFSIZE]; 
+	char * buf = (char *) malloc(BUFSIZE); 
 	int cc = 0;
 	int readUpTo = 0; 
 	int readSize = 0; 
@@ -119,11 +119,13 @@ int streamFromRandom(int randomData, int socket, int size){
 		readSize = min(BUFSIZE, size - readUpTo);
 		cc = read(randomData, buf, readSize);
 		if( cc < 0){
+			free(buf);
 			return -1; 
 		}
 		readUpTo += cc; 
 		write(socket, buf, readSize); 
 	}
+	free(buf);
 	return 0;
 }
 

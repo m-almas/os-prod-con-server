@@ -128,7 +128,7 @@ void *worker(void *ign)
 }
 
 int streamToDevNull(int socket, int devNull, int size){
-    char buffer[BUFSIZE];
+    char * buffer = (char *) malloc(BUFSIZE);
     int readUpTo = 0; 
     int cc = 0;
     int readSize = 0; 
@@ -142,6 +142,7 @@ int streamToDevNull(int socket, int devNull, int size){
         readUpTo += cc; 
         write(devNull, buffer, readSize);
     }
+    free(buffer);
     return readUpTo; 
 }
 
