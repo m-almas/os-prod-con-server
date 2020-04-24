@@ -12,6 +12,7 @@
 #include <prodcon.h>
 #include <sys/types.h>
 #include <sys/time.h>
+#include <time.h>
 
 #define QLEN 5
 #define PRODUCE 1
@@ -60,6 +61,14 @@ int main(int argc, char *argv[])
 	int fd;
 	int mfdv;
 	char commandBuffer[512];
+	time_t socketArrivalTimes[1024]; //used as a hash for socket
+	for(int i = 0; i < 1024; i++){
+		socketArrivalTimes[i] = -1; //initial values 
+	}
+	time_t seconds;
+	struct timeval tv;
+	tv.tv_sec = 2; 
+	tv.tv_usec = 0;  
 	switch (argc)
 	{
 	case 2:
@@ -102,10 +111,25 @@ int main(int argc, char *argv[])
 		memcpy((char *)&rfds, (char *)&afds, sizeof(rfds));
 		alen = sizeof(fsin);
 		if (select(FD_SETSIZE, &rfds, (fd_set *)0, (fd_set *)0,
-				   (struct timeval *)0) < 0)
+				   &tv) <= 0)
 		{
-			fprintf(stderr, "server select: %s\n", strerror(errno));
-			exit(-1);
+			//here I should check whether I am waiting too long
+			for (fd = 0; fd < mfdv; fd++)
+			{
+				if (fd != msock && FD_ISSET(fd, &afds))
+				{
+					seconds = time(NULL); //current time
+					if(socketArrivalTimes[fd] > 0){
+						if(seconds - socketArrivalTimes[fd] > REJECT_TIME){
+							socketArrivalTimes[fd] = -1; 
+							close(fd);
+							FD_CLR(fd, &afds);
+							printf("rejected this socket %i \n", fd);
+							fflush(stdout);
+						}
+					}	
+				}
+			}
 		}
 		//something is ready to be read
 		if (FD_ISSET(msock, &rfds))
@@ -121,6 +145,9 @@ int main(int argc, char *argv[])
 				mfdv = ssock + 1;
 			}
 			FD_SET(ssock, &afds);
+			//here I should add into time
+			seconds = time(NULL); 
+			socketArrivalTimes[ssock] = seconds; 
 		}
 
 		for (fd = 0; fd < mfdv; fd++)
@@ -128,6 +155,7 @@ int main(int argc, char *argv[])
 			if (fd != msock && FD_ISSET(fd, &rfds))
 			{
 				FD_CLR(fd, &afds);
+				socketArrivalTimes[fd] = -1; 
 				if ((cc = read(fd, commandBuffer, 512)) <= 0)
 				{
 					printf("The client has gone.\n");
