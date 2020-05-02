@@ -32,7 +32,7 @@ int min(int a, int b);
 
 ITEM *initItem(uint32_t size, int socket);
 
-int stramLetters(ITEM * item, int socket);
+int streamLetters(ITEM * item, int socket);
 
 int getCommandType(char *commandBuffer);
 
@@ -252,7 +252,7 @@ void *handleConsumer(void * ign)
 	sem_post(&consumed);
 	netInt = htonl(item->size);
 	write(ssock, &netInt, 4);
-	if(stramLetters(item, ssock) != 0){ // responsible for closing producer socket
+	if(streamLetters(item, ssock) != 0){ // responsible for closing producer socket
 		printf("we got problems during streaming process\n");
 	}
 	free(item);
@@ -318,7 +318,7 @@ char* readLetters(ITEM * item){
 	return letters;  
 }
 
-int stramLetters(ITEM * item, int socket){
+int streamLetters(ITEM * item, int socket){
 	char * smallBuffer = (char*) malloc(BUFSIZE); //may be you should not hard code?
 	//here I am assuming that read will not be interupted because the values are small 
 	int cc = 0;
