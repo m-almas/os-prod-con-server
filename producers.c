@@ -78,7 +78,7 @@ int main(int argc, char *argv[])
 void *worker(void *ign)
 {
 	int csock;
-	char buf[BUFSIZE];
+	char* buf =(char *) malloc(BUFSIZE);
 	int size;
 	int netInt;
 	int randomData = open("/dev/urandom", O_RDONLY);
@@ -104,11 +104,15 @@ void *worker(void *ign)
 		read(csock, buf, BUFSIZE);
 			if (strncmp(buf, "GO\r\n", 4) == 0)
 			{
-					streamFromRandom(randomData, csock, size);
-					read(csock, buf, BUFSIZE); //should be done
-					close(csock);
+					if(streamFromRandom(randomData, csock, size) < 0){
+						printf("encountered problem when streamin \n");
+						fflush(stdout);
+					}else{
+						read(csock, buf, BUFSIZE); //should be done
+					}
 			}
 	}
+	free(buf);
 	close(csock);
 	close(randomData);
 	pthread_exit(0);

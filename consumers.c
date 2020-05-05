@@ -20,8 +20,6 @@ int bad;
 double poissonRandomInterarrivalDelay( double r );
 int connectsock(char *host, char *service, char *protocol);
 void *worker(void *ign);
-int properRead(int ssock, int size, char *letters);
-int min(int a, int b);
 int streamToDevNull(int socket, int devNull, int size);
 /*
 **	Consumer Client
@@ -82,7 +80,7 @@ void *worker(void *ign)
     int netInt;
     int size;
     int cc;
-    char buffer[BUFSIZE];
+    char* buffer = (char *) malloc(BUFSIZE);
     char fileName[64];
     pthread_t pid = pthread_self();
     sprintf(fileName, "%lu.txt", pid);
@@ -105,7 +103,7 @@ void *worker(void *ign)
     write(csock, "CONSUME\r\n", 10);
     if(read(csock, &netInt, 4) < 0){
         sprintf(buffer, "%s", REJECT);
-        write(fd, buffer, BUFSIZE);
+        write(fd, buffer, strlen(buffer));
         close(csock); 
         pthread_exit(0);
     }
@@ -116,11 +114,12 @@ void *worker(void *ign)
     int readUpTo = streamToDevNull(csock, devNull, size);
     if(readUpTo < size){
         sprintf(buffer, "%s %i", BYTE_ERROR, readUpTo);
-        write(fd, buffer, BUFSIZE);  
+        write(fd, buffer, strlen(buffer));  
     }else{
         sprintf(buffer, "%s %i", SUCCESS, readUpTo);
-        write(fd, buffer, BUFSIZE);
+        write(fd, buffer, strlen(buffer));
     }
+		free(buffer);
     close(csock);
     close(devNull);
     close(fd);
@@ -131,40 +130,16 @@ int streamToDevNull(int socket, int devNull, int size){
     char * buffer = (char *) malloc(BUFSIZE);
     int readUpTo = 0; 
     int cc = 0;
-    int readSize = 0; 
-
     while(readUpTo < size){
-        readSize = min(BUFSIZE, size - readUpTo);
-        cc = read(socket, buffer, readSize);
+        cc = read(socket, buffer, BUFSIZE);
         if( cc < 0){
             break; 
         }
         readUpTo += cc; 
-        write(devNull, buffer, readSize);
+        write(devNull, buffer, cc);
     }
     free(buffer);
     return readUpTo; 
-}
-
-int properRead(int ssock, int size, char *letters)
-{
-    int readUpTo = 0;
-    int cc;
-    for (; readUpTo < size;)
-    {
-        cc = read(ssock, (letters + readUpTo), size - readUpTo);
-        readUpTo += cc;
-        if (cc <= 0)
-        {
-            break;
-        }
-    }
-    if (readUpTo != size)
-    {
-        //we have problem
-        return 1;
-    }
-    return 0;
 }
 
 /*
@@ -177,9 +152,3 @@ double poissonRandomInterarrivalDelay( double r )
 			((double) rand())/((double) RAND_MAX)))/-r;
 }
 
-int min(int a, int b){
-    if(a < b){
-        return a; 
-    }
-    return b;
-}

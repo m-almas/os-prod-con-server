@@ -3,7 +3,7 @@
 #define PRODCON
 
 #define QLEN            5
-#define BUFSIZE         2048
+#define BUFSIZE         4096 
 
 // The maximum total simultaneous clients allowed
 #define MAX_CLIENTS     512
@@ -26,7 +26,7 @@
 #define REJECT		"ERROR: REJECTED"
 
 // Each item consists of random number of bytes between 1 and MAX_LETTERS.
-#define MAX_LETTERS		10000
+#define MAX_LETTERS		1000000000
 
 // function prototypes
 int connectsock( char *host, char *service, char *protocol );

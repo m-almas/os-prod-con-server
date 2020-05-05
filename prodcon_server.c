@@ -35,15 +35,11 @@ int rejCons = 0;
 int timeouts = 0;
 int rejected = 0; 
 
-int min(int a, int b);
-
 ITEM *initItem(uint32_t size, int socket);
 
 int streamLetters(ITEM * item, int socket);
 
 int getCommandType(char *commandBuffer);
-
-char* readLetters(ITEM * item);
 
 void* handleProducer(void *ign);
 
@@ -52,8 +48,6 @@ void* handleConsumer(void *ign);
 int statusCommandType(char * commandBuffer);
 
 void handleStatusClient(char * commandBuffer, int sock);
-
-int properRead(int ssock, int size, char *letters);
 
 int createIfFreeSlot(void *(*handle) (void *), int * freeSlots, int * pass);
 //corrected critical sections
@@ -126,8 +120,8 @@ int main(int argc, char *argv[])
 		tv.tv_usec = 0;  
 		if (selectResult < 0)
 		{
-			exit(-1);
 			printf("problem in select\n");
+			exit(-1);
 		}
 
 		//here I should check whether I am waiting too long 
@@ -135,7 +129,6 @@ int main(int argc, char *argv[])
 		//long clients
 		int dice = rand()%100; 
 		if( dice <= 10){
-			fflush(stdout);
 			for (fd = 0; fd < mfdv; fd++)
 			{
 				if (fd != msock && FD_ISSET(fd, &afds))
@@ -287,7 +280,10 @@ void* handleProducer(void *ign)
 	bufferIndex++;
 	sem_post(&lock);
 	sem_post(&produced);
+	item = NULL; 
+	free(item);
 	tServedProds++;
+	pthread_exit(NULL);
 }
 //free the sock there
 void *handleConsumer(void * ign)
@@ -306,7 +302,9 @@ void *handleConsumer(void * ign)
 	uint32_t netInt; // to send accross network
 	netInt = htonl(item->size);
 	write(ssock, &netInt, 4);
-	write(item->psd, "GO\r\n", 4);
+	//let's assume we do not encounter problem here
+	write(item->psd, "GO\r\n", 4); 
+
 	if(streamLetters(item, ssock) != 0){ // responsible for closing producer socket
 		printf("we got problems during streaming process\n");
 	}
@@ -320,27 +318,7 @@ void *handleConsumer(void * ign)
 	freeProdSlots++;
 	clientNumbers--;
 	sem_post(&lock);
-}
-
-int properRead(int ssock, int size, char *letters)
-{
-	int readUpTo = 0;
-	int cc;
-	for (; readUpTo < size;)
-	{
-		cc = read(ssock, (letters + readUpTo), size - readUpTo);
-		readUpTo += cc;
-		if (cc <= 0 || readUpTo == size)
-		{
-			break;
-		}
-	}
-	if (readUpTo != size)
-	{
-		//we have problem
-		return 1;
-	}
-	return 0;
+	pthread_exit(NULL);
 }
 
 int createIfFreeSlot(void *(*handle) (void *), int * freeSlots, int * pass){
@@ -358,36 +336,22 @@ int createIfFreeSlot(void *(*handle) (void *), int * freeSlots, int * pass){
 	return 0;
 }
 
-char* readLetters(ITEM * item){
-	char* letters = (char*)malloc(item->size);
-	if(properRead(item->psd, item->size, letters) != 0){
-		printf("Exit due to the read error\n");
-		fflush(stdout);
-		free(letters);
-		close(item->psd);
-		return NULL; 
-	} 
-	write(item->psd, "DONE\r\n", 6);
-	printf("released socket with %i, and size %u\n", item->psd, item->size); 
-	fflush(stdout);
-	close(item->psd);
-	return letters;  
-}
-
 int streamLetters(ITEM * item, int socket){
 	char * smallBuffer = (char*) malloc(BUFSIZE); //may be you should not hard code?
 	//here I am assuming that read will not be interupted because the values are small 
 	int cc = 0;
 	uint32_t readUpTo = 0; 
-	int readSize = 0;  
 	while(readUpTo < item->size){
-		readSize = min(BUFSIZE, item->size - readUpTo);
-		cc = read(item->psd, smallBuffer, readSize); //can it block?? 
+		cc = read(item->psd, smallBuffer, BUFSIZE); //can it block?? 
 		if(cc < 0){
-			break;	
+			printf("Here we have problem!\n");
+			fflush(stdout);
+			close(item->psd);
+			free(smallBuffer);
+			return -1;
 		}
 		readUpTo += cc;
-		write(socket, smallBuffer, readSize);  
+		write(socket, smallBuffer, cc);  
 	}
 	write(item->psd, "DONE\r\n", 6);
 	printf("released socket with %i, and size %u\n", item->psd, item->size); 
@@ -395,13 +359,6 @@ int streamLetters(ITEM * item, int socket){
 	free(smallBuffer);
 	close(item->psd);
 	return 0; 
-}
-
-int min(int a, int b){
-    if(a < b){
-        return a; 
-    }
-    return b;
 }
 
 int statusCommandType(char * commandBuffer){
