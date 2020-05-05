@@ -78,7 +78,7 @@ int main(int argc, char *argv[])
 	}
 	time_t seconds;
 	struct timeval tv;
-	tv.tv_sec = 2; 
+	tv.tv_sec = REJECT_TIME; 
 	tv.tv_usec = 0;  
 	switch (argc)
 	{
@@ -121,10 +121,21 @@ int main(int argc, char *argv[])
 	{
 		memcpy((char *)&rfds, (char *)&afds, sizeof(rfds));
 		alen = sizeof(fsin);
-		if (select(FD_SETSIZE, &rfds, (fd_set *)0, (fd_set *)0,
-				   &tv) <= 0)
+		int selectResult = select(FD_SETSIZE, &rfds, (fd_set *)0, (fd_set *)0, &tv);  
+		tv.tv_sec = REJECT_TIME; 
+		tv.tv_usec = 0;  
+		if (selectResult < 0)
 		{
-			//here I should check whether I am waiting too long
+			exit(-1);
+			printf("problem in select\n");
+		}
+
+		//here I should check whether I am waiting too long 
+		//10 percent of time I check for
+		//long clients
+		int dice = rand()%100; 
+		if( dice <= 10){
+			fflush(stdout);
 			for (fd = 0; fd < mfdv; fd++)
 			{
 				if (fd != msock && FD_ISSET(fd, &afds))
@@ -143,6 +154,7 @@ int main(int argc, char *argv[])
 				}
 			}
 		}
+
 		//something is ready to be read
 		if (FD_ISSET(msock, &rfds))
 		{
