@@ -101,13 +101,14 @@ void *worker(void *ign)
 	}
 
     write(csock, "CONSUME\r\n", 10);
-    if(read(csock, &netInt, 4) < 0){
+    if(read(csock, &netInt, 4) < 4){
         sprintf(buffer, "%s", REJECT);
         write(fd, buffer, strlen(buffer));
         close(csock); 
-        pthread_exit(0);
+        pthread_exit(NULL);
     }
     size = ntohl(netInt);
+		//system printfs
     printf("%s ", fileName);
     printf("size %i \n", size);
     fflush(stdout);
