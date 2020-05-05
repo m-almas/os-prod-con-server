@@ -17,6 +17,7 @@
 #define QLEN 5
 #define PRODUCE 1
 #define CONSUME 2
+#define STATUS 3
 
 ITEM **itemBuffer; // here we are going to store the pointers to the address
 sem_t consumed;	   // initial value is equal to the bufferSize
@@ -27,6 +28,12 @@ fd_set rfds, afds;
 int freeProdSlots = MAX_PROD;
 int freeConSlots = MAX_CON;
 int clientNumbers = 0;
+int tServedProds = 0;
+int tServedCons = 0;
+int rejProds = 0;
+int rejCons = 0; 
+int timeouts = 0;
+int rejected = 0; 
 
 int min(int a, int b);
 
@@ -41,6 +48,10 @@ char* readLetters(ITEM * item);
 void* handleProducer(void *ign);
 
 void* handleConsumer(void *ign);
+
+int statusCommandType(char * commandBuffer);
+
+void handleStatusClient(char * commandBuffer, int sock);
 
 int properRead(int ssock, int size, char *letters);
 
@@ -125,6 +136,7 @@ int main(int argc, char *argv[])
 							close(fd);
 							FD_CLR(fd, &afds);
 							printf("rejected this socket %i \n", fd);
+							timeouts++;
 							fflush(stdout);
 						}
 					}	
@@ -136,18 +148,31 @@ int main(int argc, char *argv[])
 		{
 			int ssock;
 			ssock = accept(msock, (struct sockaddr *)&fsin, &alen);
-			if (ssock < 0)
-			{
-				fprintf(stderr, "accept: %s\n", strerror(errno));
-				exit(-1);
+			//consider checking for max
+			//we do not to increment here clientNumbers therefore we do not need critical section
+			//createIffreesockts will do it for us
+			//otherwise it will be rejected due to timeout
+			//there might be problem in case there is more than 1024 clients that timeout
+			//but for the sake of simplicity I will not hanle such case
+			if (clientNumbers >= MAX_CLIENTS){
+				//here we need to increment rejected clients
+					rejected++;
+					close(ssock);
+			}else{
+
+					if (ssock < 0)
+					{
+						fprintf(stderr, "accept: %s\n", strerror(errno));
+						exit(-1);
+					}
+					if(ssock + 1 > mfdv){
+						mfdv = ssock + 1;
+					}
+					FD_SET(ssock, &afds);
+					//here I should add into time
+					seconds = time(NULL); 
+					socketArrivalTimes[ssock] = seconds; 
 			}
-			if(ssock + 1 > mfdv){
-				mfdv = ssock + 1;
-			}
-			FD_SET(ssock, &afds);
-			//here I should add into time
-			seconds = time(NULL); 
-			socketArrivalTimes[ssock] = seconds; 
 		}
 
 		for (fd = 0; fd < mfdv; fd++)
@@ -170,6 +195,7 @@ int main(int argc, char *argv[])
 					{
 					case PRODUCE:
 						if(createIfFreeSlot(handleProducer, &freeProdSlots, pass) < 0){
+							rejProds++;
 							printf("no free producer slots there \n");
 							close(*pass);
 							free(pass);
@@ -178,13 +204,23 @@ int main(int argc, char *argv[])
 						break;
 					case CONSUME:
 						if(createIfFreeSlot(handleConsumer, &freeConSlots, pass) < 0){
+							rejCons++;
 							printf("no free consumer slots there \n");
 							close(*pass);
 							free(pass);
 							fflush(stdout);
 						}
 						break;
+					case STATUS:
+						//the underlying function is nonthreaded remember!
+						handleStatusClient(commandBuffer, *pass);
+						close(*pass);
+						free(pass);
+						break;
 					default:
+						write(*pass, "Wrong Client\n", 13);
+						close(*pass);
+						free(pass);
 						break;
 					}
 				}
@@ -215,6 +251,9 @@ int getCommandType(char *commandBuffer)
 	{
 		return CONSUME;
 	}
+	else if (strncmp(commandBuffer, "STATUS", 6) == 0){
+		return STATUS;
+	}
 	return -1;
 }
 //free the sock there
@@ -228,21 +267,20 @@ void* handleProducer(void *ign)
 	read(ssock, &size, 4);
 	size = ntohl(size);
 	item = initItem(size, ssock);
+	free(ign);
+
 	sem_wait(&consumed);
 	sem_wait(&lock);
 	itemBuffer[bufferIndex] = item;
 	bufferIndex++;
 	sem_post(&lock);
 	sem_post(&produced);
-	free(ign);
+	tServedProds++;
 }
 //free the sock there
 void *handleConsumer(void * ign)
 {
-	int ssock = *((int *)ign);
 	ITEM *item;
-	int itemIndex;
-	uint32_t netInt; // to send accross network
 	sem_wait(&produced);
 	sem_wait(&lock);
 	bufferIndex--;
@@ -250,20 +288,25 @@ void *handleConsumer(void * ign)
 	itemBuffer[bufferIndex] = NULL;
 	sem_post(&lock);
 	sem_post(&consumed);
+	tServedCons++;
+
+	int ssock = *((int *)ign);
+	uint32_t netInt; // to send accross network
 	netInt = htonl(item->size);
 	write(ssock, &netInt, 4);
 	if(streamLetters(item, ssock) != 0){ // responsible for closing producer socket
 		printf("we got problems during streaming process\n");
 	}
 	free(item);
+	close(ssock); 
+	free(ign);
+
 	sem_wait(&lock);
 	freeConSlots++; 
 	clientNumbers--;
 	freeProdSlots++;
 	clientNumbers--;
 	sem_post(&lock);
-	close(ssock); 
-	free(ign);
 }
 
 int properRead(int ssock, int size, char *letters)
@@ -346,4 +389,95 @@ int min(int a, int b){
         return a; 
     }
     return b;
+}
+
+int statusCommandType(char * commandBuffer){
+	
+	if (strncmp(commandBuffer, "STATUS/CURRCLI\r\n", 14) == 0)
+	{
+		return 1;
+	}
+	else if (strncmp(commandBuffer, "STATUS/CURRPROD\r\n", 15) == 0)
+	{
+		return 2;
+	}
+	else if (strncmp(commandBuffer, "STATUS/CURRCONS\r\n", 15) == 0)
+	{
+		return 3;
+	}
+	else if (strncmp(commandBuffer, "STATUS/TOTPROD\r\n", 15) == 0)
+	{
+		return 4;
+	}
+	else if (strncmp(commandBuffer, "STATUS/TOTCONS\r\n", 15) == 0)
+	{
+		return 5;
+	}
+	else if (strncmp(commandBuffer, "STATUS/REJMAX\r\n", 15) == 0)
+	{
+		return 6;
+	}
+	else if (strncmp(commandBuffer, "STATUS/REJSLOW\r\n", 15) == 0)
+	{
+		return 7;
+	}
+	else if (strncmp(commandBuffer, "STATUS/REJPROD\r\n", 15) == 0)
+	{
+		return 8;
+	}
+	else if (strncmp(commandBuffer, "STATUS/REJCONS\r\n", 15) == 0)
+	{
+		return 9;
+	}
+	return -1;
+}
+
+//total clients Being server is clientNumbers
+//max_prod - freeProdSlots = producers and they are currently being served
+//max_con - freeConSlots = consumers and they are currently being server
+//tservedproducers new var
+//tservedconsumers new var
+//rejectedProducers new var
+//rejectedConsumers new var
+//timeouts new var
+//rejectedProd + rejectedCon
+
+void handleStatusClient(char *commandBuffer, int sock){
+	char respond[64];
+	int respondNumber;
+	switch(statusCommandType(commandBuffer)){
+		case 1:
+			respondNumber = clientNumbers;
+			break;
+		case 2:
+			respondNumber = MAX_PROD - freeProdSlots;
+			break;
+		case 3:
+			respondNumber = MAX_CON - freeConSlots;
+			break;
+		case 4:
+			respondNumber = tServedProds;
+			break;
+		case 5:
+			respondNumber = tServedCons;
+			break;
+		case 6:
+			//think about it
+			respondNumber = rejProds + rejCons + rejected;
+			break;
+		case 7:
+			respondNumber = timeouts;
+			break;
+		case 8:
+			respondNumber = rejProds;
+			break;
+		case 9:
+			respondNumber = rejCons;
+			break;
+		case -1:
+			write(sock, "Wrong Inputs\n", 13);
+			return;
+	}	
+			sprintf(respond, "%d\r\n", respondNumber);
+			write(sock, respond, strlen(respond));
 }
