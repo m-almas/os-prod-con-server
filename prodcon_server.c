@@ -432,7 +432,7 @@ void handleStatusClient(char *commandBuffer, int sock){
 			respondNumber = tServedCons;
 			break;
 		case 6:
-			//think about it
+			//think about it, is it only rejProds + rejCons?
 			respondNumber = rejProds + rejCons + rejected;
 			break;
 		case 7:
