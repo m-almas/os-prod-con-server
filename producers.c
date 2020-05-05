@@ -101,9 +101,13 @@ void *worker(void *ign)
 	{
 		netInt = htonl(size);
 		write(csock, &netInt, 4);
-		streamFromRandom(randomData, csock, size);
-		read(csock, buf, BUFSIZE); //should be done
-		close(csock);
+		read(csock, buf, BUFSIZE);
+			if (strncmp(buf, "GO\r\n", 4) == 0)
+			{
+					streamFromRandom(randomData, csock, size);
+					read(csock, buf, BUFSIZE); //should be done
+					close(csock);
+			}
 	}
 	close(csock);
 	close(randomData);

@@ -294,6 +294,7 @@ void *handleConsumer(void * ign)
 	uint32_t netInt; // to send accross network
 	netInt = htonl(item->size);
 	write(ssock, &netInt, 4);
+	write(item->psd, "GO\r\n", 4);
 	if(streamLetters(item, ssock) != 0){ // responsible for closing producer socket
 		printf("we got problems during streaming process\n");
 	}
