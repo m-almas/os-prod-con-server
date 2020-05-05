@@ -20,9 +20,7 @@ int bad;
 double poissonRandomInterarrivalDelay( double r );
 int connectsock(char *host, char *service, char *protocol);
 void *worker(void *ign);
-char *randstring(size_t length);
 int streamFromRandom(int randomData, int socket, int size);
-int min(int a, int b);
 /*
 **	Producer Client
 */
@@ -95,7 +93,6 @@ void *worker(void *ign)
 	}
 	write(csock, "PRODUCE\r\n", 10);
 	size = (rand() + 1) % MAX_LETTERS;
-	// letters = randstring(size); // generated random string
 	read(csock, buf, BUFSIZE);
 	if (strncmp(buf, "GO\r\n", 4) == 0)
 	{
@@ -122,45 +119,17 @@ int streamFromRandom(int randomData, int socket, int size){
 	char * buf = (char *) malloc(BUFSIZE); 
 	int cc = 0;
 	int readUpTo = 0; 
-	int readSize = 0; 
 	while(readUpTo < size){
-		readSize = min(BUFSIZE, size - readUpTo);
-		cc = read(randomData, buf, readSize);
+		cc = read(randomData, buf, BUFSIZE);
 		if( cc < 0){
 			free(buf);
 			return -1; 
 		}
 		readUpTo += cc; 
-		write(socket, buf, readSize); 
+		write(socket, buf, cc); 
 	}
 	free(buf);
 	return 0;
-}
-
-//this code was copyPasted
-char *randstring(size_t length)
-{
-
-	static char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789,.-#'?!";
-	char *randomString = NULL;
-
-	if (length)
-	{
-		randomString = malloc(sizeof(char) * (length + 1));
-
-		if (randomString)
-		{
-			for (int n = 0; n < length; n++)
-			{
-				int key = rand() % (int)(sizeof(charset) - 1);
-				randomString[n] = charset[key];
-			}
-
-			randomString[length] = '\0';
-		}
-	}
-
-	return randomString;
 }
 
 /*
@@ -173,9 +142,3 @@ double poissonRandomInterarrivalDelay( double r )
 			((double) rand())/((double) RAND_MAX)))/-r;
 }
 
-int min(int a, int b){
-	if(a < b){
-		return a; 
-	}
-	return b;
-}
